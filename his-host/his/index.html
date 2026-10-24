@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HIS 故障知识库（个人学习练习）</title>
+<!--
+  本项目仅供个人学习练习，不适合正式业务使用。
+  严禁直接部署于正式生产环境。
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh; color: #333;
+  }
+  .hidden { display: none !important; }
+
+  /* ===== 消息提示 ===== */
+  #toast-container {
+    position: fixed; top: 20px; right: 20px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .toast {
+    min-width: 240px; padding: 12px 18px; border-radius: 6px; color: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: slideIn 0.3s ease;
+    font-size: 14px;
+  }
+  .toast.success { background: #28a745; }
+  .toast.error { background: #dc3545; }
+  .toast.info { background: #17a2b8; }
+  @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ===== 登录页 ===== */
+  #login-page {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .login-card {
+    background: #fff; border-radius: 12px; padding: 40px; width: 100%; max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .login-card h1 { text-align: center; color: #4a2b7a; margin-bottom: 8px; font-size: 24px; }
+  .login-card .subtitle { text-align: center; color: #888; font-size: 12px; margin-bottom: 28px; }
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; margin-bottom: 6px; color: #555; font-size: 14px; }
+  .form-group input, .form-group textarea, .form-group select {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 14px; transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #667eea; }
+  .btn {
+    width: 100%; padding: 12px; border: none; border-radius: 6px; font-size: 15px;
+    color: #fff; cursor: pointer; transition: background 0.2s; font-weight: 600;
+  }
+  .btn-primary { background: #667eea; }
+  .btn-primary:hover { background: #5568d3; }
+  .btn-danger { background: #dc3545; }
+  .btn-danger:hover { background: #c82333; }
+  .btn-ai { background: #6f42c1; }
+  .btn-ai:hover { background: #5a3599; }
+  .btn-secondary { background: #6c757d; }
+  .btn-secondary:hover { background: #5a6268; }
+  .btn-sm { padding: 6px 12px; font-size: 13px; width: auto; }
+
+  /* ===== 模态弹窗 ===== */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-card {
+    background: #fff; border-radius: 12px; padding: 32px; width: 100%; max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal-card h2 { color: #4a2b7a; margin-bottom: 8px; font-size: 20px; }
+  .modal-card .warn { color: #dc3545; font-size: 12px; margin-bottom: 20px; }
+
+  /* ===== 主页面 ===== */
+  #main-page { min-height: 100vh; background: #f5f6fa; }
+  .navbar {
+    background: #4a2b7a; color: #fff; padding: 14px 24px; display: flex;
+    justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .navbar .title { font-size: 18px; font-weight: 600; }
+  .navbar .right { display: flex; align-items: center; gap: 16px; }
+  .navbar .user-info { font-size: 14px; opacity: 0.9; }
+  .btn-logout {
+    background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 14px;
+    border-radius: 4px; cursor: pointer; font-size: 13px;
+  }
+  .btn-logout:hover { background: rgba(255,255,255,0.35); }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; }
+  .tab {
+    padding: 10px 22px; cursor: pointer; border: none; background: none; font-size: 15px;
+    color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s;
+  }
+  .tab.active { color: #4a2b7a; border-bottom-color: #4a2b7a; font-weight: 600; }
+  .tab:hover { color: #4a2b7a; }
+
+  .panel { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+  /* 搜索区 */
+  .search-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+  .search-bar input {
+    flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;
+  }
+  .search-bar input:focus { outline: none; border-color: #667eea; }
+  .search-bar .btn { width: auto; padding: 10px 24px; }
+
+  /* 案例列表 */
+  .case-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .case-card {
+    background: #fff; border: 1px solid #eee; border-radius: 8px; overflow: hidden;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .case-card:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.12); transform: translateY(-2px); }
+  .case-card .thumb {
+    width: 100%; height: 160px; background: #f0f0f0; display: flex; align-items: center;
+    justify-content: center; color: #aaa; font-size: 13px; overflow: hidden;
+  }
+  .case-card .thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+  .case-card .body { padding: 14px; }
+  .case-card .case-title { font-size: 16px; font-weight: 600; color: #333; margin-bottom: 6px; }
+  .case-card .case-tag {
+    display: inline-block; background: #eef2ff; color: #4a2b7a; padding: 2px 8px;
+    border-radius: 4px; font-size: 12px; margin-bottom: 8px;
+  }
+  .case-card .summary { font-size: 13px; color: #666; margin-bottom: 6px; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .case-card .summary b { color: #444; }
+  .case-card .meta { font-size: 12px; color: #999; border-top: 1px dashed #eee; padding-top: 8px;
+    display: flex; justify-content: space-between; align-items: center; }
+  .case-card .del-btn {
+    background: none; border: 1px solid #dc3545; color: #dc3545; padding: 3px 10px;
+    border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  .case-card .del-btn:hover { background: #dc3545; color: #fff; }
+
+  .empty-tip {
+    text-align: center; padding: 40px 20px; color: #999; font-size: 15px;
+  }
+  .ai-trigger { margin-top: 16px; text-align: center; }
+
+  /* AI 结果区 */
+  .ai-result-box {
+    background: #1e1e2e; color: #d4d4d4; padding: 18px; border-radius: 8px; margin-top: 16px;
+    font-family: "Consolas", "Courier New", monospace; font-size: 13px; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-word; border-left: 4px solid #6f42c1;
+  }
+  .ai-section { margin-top: 20px; border-top: 1px solid #eee; padding-top: 16px; }
+  .ai-section h3 { color: #6f42c1; margin-bottom: 10px; font-size: 15px; }
+
+  .loading { text-align: center; padding: 20px; color: #888; }
+  .spinner {
+    display: inline-block; width: 18px; height: 18px; border: 2px solid #ccc;
+    border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== AI 对话框（悬浮窗） ===== */
+  #chat-fab {
+    position: fixed; right: 24px; bottom: 24px; z-index: 8000;
+    width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff; font-size: 26px; line-height: 56px; text-align: center;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.45); transition: transform 0.2s, box-shadow 0.2s;
+  }
+  #chat-fab:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 12px 28px rgba(102, 126, 234, 0.55); }
+
+  #chat-panel {
+    position: fixed; right: 24px; bottom: 92px; z-index: 8000;
+    width: 380px; max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 140px);
+    background: #fff; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex; flex-direction: column;
+  }
+  #chat-panel.hidden { display: none; }
+
+  .chat-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .chat-header .chat-title { font-size: 15px; font-weight: 600; }
+  .chat-header .chat-sub { font-size: 11px; opacity: 0.85; margin-top: 2px; }
+  .chat-header .chat-actions button {
+    background: rgba(255,255,255,0.18); border: none; color: #fff; cursor: pointer;
+    width: 28px; height: 28px; border-radius: 6px; font-size: 14px; margin-left: 6px; transition: background 0.2s;
+  }
+  .chat-header .chat-actions button:hover { background: rgba(255,255,255,0.32); }
+
+  #chat-messages {
+    flex: 1; overflow-y: auto; padding: 14px; background: #f6f7fb;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .chat-msg { max-width: 82%; padding: 9px 13px; border-radius: 12px; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .chat-msg.user {
+    align-self: flex-end; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff; border-bottom-right-radius: 4px;
+  }
+  .chat-msg.assistant {
+    align-self: flex-start; background: #fff; color: #333;
+    border: 1px solid #e6e8f0; border-bottom-left-radius: 4px;
+  }
+  .chat-msg.error { align-self: center; background: #fdecea; color: #c0392b; font-size: 12.5px; border-radius: 8px; }
+  .chat-tip { text-align: center; font-size: 11.5px; color: #a0a6b8; }
+
+  .chat-input-bar {
+    display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #eceef4; background: #fff; flex-shrink: 0;
+  }
+  #chat-input {
+    flex: 1; resize: none; border: 1px solid #ddd; border-radius: 8px; padding: 9px 11px;
+    font-size: 13.5px; font-family: inherit; line-height: 1.5; height: 44px; outline: none; transition: border-color 0.2s;
+  }
+  #chat-input:focus { border-color: #764ba2; }
+  #chat-send {
+    border: none; cursor: pointer; border-radius: 8px; padding: 0 16px; font-size: 13.5px; color: #fff;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); transition: opacity 0.2s;
+  }
+  #chat-send:disabled { opacity: 0.55; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<!-- ============ 登录页 ============ -->
+<div id="login-page">
+  <div class="login-card">
+    <h1>HIS 故障知识库</h1>
+    <div class="subtitle">个人学习练习项目 · 仅供学习</div>
+    <form id="login-form">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="login-username" placeholder="请输入用户名" required autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="login-password" placeholder="请输入密码" required />
+      </div>
+      <button type="submit" class="btn btn-primary">登 录</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ 强制改密弹窗 ============ -->
+<div id="change-pwd-modal" class="modal-mask hidden">
+  <div class="modal-card">
+    <h2>首次登录 · 修改密码</h2>
+    <div class="warn">检测到首次登录，必须修改初始密码后才能继续使用系统。</div>
+    <form id="change-pwd-form">
+      <div class="form-group">
+        <label>旧密码</label>
+        <input type="password" id="cp-old" placeholder="请输入当前密码" required />
+      </div>
+      <div class="form-group">
+        <label>新密码（至少 6 位）</label>
+        <input type="password" id="cp-new" placeholder="请输入新密码" required />
+      </div>
+      <div class="form-group">
+        <label>确认新密码</label>
+        <input type="password" id="cp-confirm" placeholder="请再次输入新密码" required />
+      </div>
+      <button type="submit" class="btn btn-primary">确认修改</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ 主业务页 ============ -->
+<div id="main-page" class="hidden">
+  <div class="navbar">
+    <div class="title">HIS 故障知识库</div>
+    <div class="right">
+      <span class="user-info" id="nav-username"></span>
+      <button class="btn-logout" onclick="logout()">登出</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <button class="tab active" data-tab="list" onclick="switchTab('list')">案例列表</button>
+      <button class="tab" data-tab="new" onclick="switchTab('new')">新增案例</button>
+    </div>
+
+    <!-- 案例列表 -->
+    <div id="tab-list" class="panel">
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="搜索标题 / 标签 / 故障原因 / 解决方案" onkeydown="if(event.key==='Enter') doSearch()" />
+        <button class="btn btn-primary" onclick="doSearch()">搜索</button>
+        <button class="btn btn-secondary" onclick="clearSearch()">刷新</button>
+      </div>
+
+      <div id="case-list-container"></div>
+
+      <!-- 无结果 + AI 触发 -->
+      <div id="no-result-area" class="hidden">
+        <div class="empty-tip" id="no-result-text">未找到匹配的本地故障案例。</div>
+        <div class="ai-trigger">
+          <button class="btn btn-ai" onclick="callAI()">🤖 调用 AI 故障分析（会消耗 token）</button>
+        </div>
+      </div>
+
+      <!-- AI 结果展示 -->
+      <div id="ai-area" class="ai-section hidden">
+        <h3>🤖 AI 故障分析结果</h3>
+        <div id="ai-result" class="ai-result-box"></div>
+      </div>
+    </div>
+
+    <!-- 新增案例 -->
+    <div id="tab-new" class="panel hidden">
+      <form id="case-form">
+        <div class="form-group">
+          <label>标题 *</label>
+          <input type="text" id="case-title" placeholder="请输入故障标题" required />
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <input type="text" id="case-tag" placeholder="例如：门诊药房 / 网络 / 字典" />
+        </div>
+        <div class="form-group">
+          <label>故障原因</label>
+          <textarea id="case-reason" rows="4" placeholder="请描述故障原因"></textarea>
+        </div>
+        <div class="form-group">
+          <label>解决方案</label>
+          <textarea id="case-solution" rows="4" placeholder="请描述解决方案"></textarea>
+        </div>
+        <div class="form-group">
+          <label>报错截图</label>
+          <input type="file" id="case-image" accept="image/*" />
+        </div>
+        <button type="submit" class="btn btn-primary">提交案例</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ AI 对话框（悬浮窗） ============ -->
+<button id="chat-fab" title="AI 助手对话" onclick="toggleChat()" style="display:none">🤖</button>
+
+<div id="chat-panel" class="hidden">
+  <div class="chat-header">
+    <div>
+      <div class="chat-title">🤖 AI 运维助手 · 小智</div>
+      <div class="chat-sub">HIS 故障排查多轮对话 · 仅供学习参考</div>
+    </div>
+    <div class="chat-actions">
+      <button title="清空对话" onclick="clearChat()">🗑</button>
+      <button title="收起" onclick="toggleChat()">✕</button>
+    </div>
+  </div>
+  <div id="chat-messages">
+    <div class="chat-tip">你好，我是 HIS 运维助手小智。可以描述故障现象、粘贴报错信息，我会给出排查建议。</div>
+  </div>
+  <div class="chat-input-bar">
+    <textarea id="chat-input" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+    <button id="chat-send" onclick="sendChat()">发送</button>
+  </div>
+</div>
+
+<script>
+// ===================== 配置 =====================
+const API_BASE = ""; // 前后端同源，使用相对路径；如部署不同地址请改为 "http://host:port"
+
+// ===================== 工具函数 =====================
+function getToken() { return localStorage.getItem("his_token") || ""; }
+function setToken(t) { localStorage.setItem("his_token", t); }
+function clearToken() { localStorage.removeItem("his_token"); localStorage.removeItem("his_user"); }
+function getUser() { return localStorage.getItem("his_user") || ""; }
+function setUser(u) { localStorage.setItem("his_user", u); }
+
+function toast(msg, type = "info") {
+  const wrap = document.getElementById("toast-container");
+  const el = document.createElement("div");
+  el.className = "toast " + type;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 300); }, 2800);
+}
+
+async function api(path, options = {}) {
+  const headers = options.headers || {};
+  const silent401 = options.silent401 === true; // 静默 401，不弹提示
+  const token = getToken();
+  if (token) headers["Authorization"] = "Bearer " + token;
+  let body = options.body;
+  if (body && typeof body === "object" && !(body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(body);
+  }
+  const resp = await fetch(API_BASE + path, { ...options, headers, body });
+  let data = null;
+  try { data = await resp.json(); } catch (e) { data = {}; }
+  if (resp.status === 401) {
+    clearToken();
+    if (!silent401) {
+      showLoginPage();
+      toast("登录已失效，请重新登录", "error");
+    }
+    throw new Error("401");
+  }
+  if (!resp.ok) {
+    const msg = (data && data.detail) || ("请求失败：" + resp.status);
+    toast(msg, "error");
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function showLoginPage() {
+  // 主动清理残留的令牌/用户信息，防止旧数据反复触发 401 提示
+  localStorage.removeItem("his_token");
+  localStorage.removeItem("his_user");
+  // 清除已有 toast，避免页面切换时残留提示
+  document.getElementById("toast-container").innerHTML = "";
+  document.getElementById("login-page").classList.remove("hidden");
+  document.getElementById("main-page").classList.add("hidden");
+  document.getElementById("change-pwd-modal").classList.add("hidden");
+  // 登录页隐藏 AI 对话入口
+  document.getElementById("chat-fab").style.display = "none";
+  document.getElementById("chat-panel").classList.add("hidden");
+}
+function showMainPage() {
+  document.getElementById("login-page").classList.add("hidden");
+  document.getElementById("main-page").classList.remove("hidden");
+  document.getElementById("nav-username").textContent = "用户：" + getUser();
+  document.getElementById("chat-fab").style.display = "block";
+  loadCases();
+}
+
+// ===================== 登录 =====================
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+  try {
+    const res = await api("/api/login", {
+      method: "POST",
+      body: { username, password }
+    });
+    setToken(res.token);
+    setUser(res.username);
+    if (res.is_first_login) {
+      // admin 首次登录：强制改密
+      showMainPageShadow();
+      showChangePwdModal();
+      toast("首次登录，请先修改密码", "info");
+    } else {
+      showMainPage();
+      toast("登录成功", "success");
+    }
+  } catch (err) { /* toast 已处理 */ }
+});
+
+// 仅显示主页面壳（不加载列表），等待改密
+function showMainPageShadow() {
+  document.getElementById("login-page").classList.add("hidden");
+  document.getElementById("main-page").classList.remove("hidden");
+  document.getElementById("nav-username").textContent = "用户：" + getUser();
+}
+
+// ===================== 强制改密 =====================
+function showChangePwdModal() {
+  document.getElementById("change-pwd-modal").classList.remove("hidden");
+}
+function hideChangePwdModal() {
+  document.getElementById("change-pwd-modal").classList.add("hidden");
+}
+document.getElementById("change-pwd-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const oldp = document.getElementById("cp-old").value;
+  const newp = document.getElementById("cp-new").value;
+  const confirm = document.getElementById("cp-confirm").value;
+  if (newp.length < 6) { toast("新密码至少 6 位", "error"); return; }
+  if (newp !== confirm) { toast("两次输入的新密码不一致", "error"); return; }
+  try {
+    const res = await api("/api/change_password", {
+      method: "POST",
+      body: { username: getUser(), old_password: oldp, new_password: newp }
+    });
+    setToken(res.token);
+    hideChangePwdModal();
+    toast("密码修改成功，欢迎进入系统", "success");
+    loadCases();
+  } catch (err) { /* toast 已处理 */ }
+});
+
+// ===================== 登出 =====================
+async function logout() {
+  try { await api("/api/logout", { method: "POST" }); } catch (e) {}
+  clearToken();
+  showLoginPage();
+  toast("已登出", "info");
+}
+
+// ===================== Tab 切换 =====================
+function switchTab(tab) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  document.getElementById("tab-list").classList.toggle("hidden", tab !== "list");
+  document.getElementById("tab-new").classList.toggle("hidden", tab !== "new");
+  if (tab === "list") loadCases();
+}
+
+// ===================== 案例列表加载 =====================
+async function loadCases(keyword) {
+  const container = document.getElementById("case-list-container");
+  document.getElementById("no-result-area").classList.add("hidden");
+  document.getElementById("ai-area").classList.add("hidden");
+  container.innerHTML = '<div class="loading"><span class="spinner"></span>加载中...</div>';
+  try {
+    let res;
+    if (keyword) {
+      res = await api("/api/search?keyword=" + encodeURIComponent(keyword));
+    } else {
+      res = await api("/api/cases");
+    }
+    const cases = res.cases || [];
+    if (cases.length === 0) {
+      if (keyword) {
+        // 有搜索词但无结果：展示 AI 按钮
+        document.getElementById("no-result-text").textContent = "未找到匹配的本地故障案例。";
+        container.innerHTML = "";
+        document.getElementById("no-result-area").classList.remove("hidden");
+      } else {
+        // 知识库为空：同样展示 AI 入口
+        container.innerHTML = "";
+        document.getElementById("no-result-text").textContent = "知识库暂无故障案例。";
+        document.getElementById("no-result-area").classList.remove("hidden");
+      }
+      return;
+    }
+    container.innerHTML = cases.map(c => renderCaseCard(c)).join("");
+  } catch (e) {
+    container.innerHTML = '<div class="empty-tip">加载失败</div>';
+  }
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch]));
+}
+
+function summary(text, len = 80) {
+  if (!text) return "（无）";
+  return text.length > len ? text.slice(0, len) + "…" : text;
+}
+
+function renderCaseCard(c) {
+  const img = c.image_path
+    ? `<img src="${API_BASE}/${c.image_path}" alt="截图" onclick="window.open(this.src)" />`
+    : `<div>暂无截图</div>`;
+  return `
+    <div class="case-card">
+      <div class="thumb">${img}</div>
+      <div class="body">
+        <div class="case-title">${escapeHtml(c.title)}</div>
+        <div class="case-tag">${escapeHtml(c.tag || "未分类")}</div>
+        <div class="summary"><b>原因：</b>${escapeHtml(summary(c.reason))}</div>
+        <div class="summary"><b>方案：</b>${escapeHtml(summary(c.solution))}</div>
+        <div class="meta">
+          <span>${escapeHtml(c.creator)} · ${escapeHtml(c.create_time)}</span>
+          <button class="del-btn" onclick="deleteCase(${c.id})">删除</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ===================== 删除案例 =====================
+async function deleteCase(id) {
+  if (!confirm("确认删除该故障案例？此操作不可恢复。")) return;
+  try {
+    await api("/api/cases/" + id, { method: "DELETE" });
+    toast("案例已删除", "success");
+    const kw = document.getElementById("search-input").value.trim();
+    loadCases(kw);
+  } catch (e) { /* toast 已处理 */ }
+}
+
+// ===================== 搜索 =====================
+function doSearch() {
+  const kw = document.getElementById("search-input").value.trim();
+  loadCases(kw);
+}
+function clearSearch() {
+  document.getElementById("search-input").value = "";
+  document.getElementById("no-result-area").classList.add("hidden");
+  document.getElementById("ai-area").classList.add("hidden");
+  loadCases();
+}
+
+// ===================== 新增案例 =====================
+document.getElementById("case-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append("title", document.getElementById("case-title").value);
+  fd.append("tag", document.getElementById("case-tag").value);
+  fd.append("reason", document.getElementById("case-reason").value);
+  fd.append("solution", document.getElementById("case-solution").value);
+  const img = document.getElementById("case-image").files[0];
+  if (img) fd.append("image", img);
+  try {
+    await api("/api/cases", { method: "POST", body: fd });
+    toast("案例新增成功", "success");
+    document.getElementById("case-form").reset();
+    switchTab("list");
+  } catch (err) { /* toast 已处理 */ }
+});
+
+// ===================== AI 分析 =====================
+async function callAI() {
+  const kw = document.getElementById("search-input").value.trim();
+  if (!kw) { toast("请先输入搜索关键词", "error"); return; }
+  const aiArea = document.getElementById("ai-area");
+  const aiResult = document.getElementById("ai-result");
+  aiArea.classList.remove("hidden");
+  aiResult.textContent = "正在调用 AI 故障分析，请稍候…";
+  try {
+    const res = await api("/api/ai_analyze", { method: "POST", body: { keyword: kw } });
+    // Mock 模式额外提示
+    const mockTip = res.mock ? `[Mock 模式提示] ${res.message}\n\n` : "";
+    // 保留换行格式
+    aiResult.textContent = mockTip + (res.result || "（AI 未返回内容）");
+  } catch (err) {
+    aiResult.textContent = "AI 分析失败：" + err.message;
+  }
+}
+
+// ===================== AI 对话框 =====================
+const chatHistory = []; // {role, content}
+
+function toggleChat() {
+  const panel = document.getElementById("chat-panel");
+  const hidden = panel.classList.toggle("hidden");
+  if (!hidden) document.getElementById("chat-input").focus();
+}
+
+function clearChat() {
+  chatHistory.length = 0;
+  const box = document.getElementById("chat-messages");
+  box.innerHTML = '<div class="chat-tip">对话已清空。你可以继续描述故障现象或提问。</div>';
+}
+
+function appendChatBubble(role, text) {
+  const box = document.getElementById("chat-messages");
+  const tip = box.querySelector(".chat-tip");
+  if (tip) tip.remove();
+  const el = document.createElement("div");
+  el.className = "chat-msg " + role;
+  el.textContent = text;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  return el;
+}
+
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("chat-send");
+  const text = input.value.trim();
+  if (!text) return;
+  if (!getToken()) { toast("请先登录后再使用 AI 对话", "error"); return; }
+
+  input.value = "";
+  sendBtn.disabled = true;
+  appendChatBubble("user", text);
+  chatHistory.push({ role: "user", content: text });
+  const loadingEl = appendChatBubble("assistant", "正在思考…");
+
+  try {
+    const res = await api("/api/ai_chat", { method: "POST", body: { messages: chatHistory } });
+    const reply = res.reply || "（AI 未返回内容）";
+    loadingEl.textContent = reply;
+    chatHistory.push({ role: "assistant", content: reply });
+    document.getElementById("chat-messages").scrollTop = document.getElementById("chat-messages").scrollHeight;
+  } catch (err) {
+    loadingEl.remove();
+    chatHistory.pop(); // 移除失败的用户消息，允许重试
+    appendChatBubble("error", "AI 对话失败：" + err.message + "（已恢复输入，可重试）");
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+// Enter 发送，Shift+Enter 换行
+document.getElementById("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+// ===================== 启动时校验令牌 =====================
+(async function init() {
+  const token = getToken();
+  if (!token) { showLoginPage(); return; }
+  try {
+    const me = await api("/api/me", { silent401: true });
+    setUser(me.username);
+    if (me.is_first_login) {
+      showMainPageShadow();
+      showChangePwdModal();
+      toast("首次登录，请先修改密码", "info");
+    } else {
+      showMainPage();
+    }
+  } catch (e) {
+    // 令牌无效或其它错误，静默展示登录页
+    showLoginPage();
+  }
+})();
+</script>
+</body>
+</html>

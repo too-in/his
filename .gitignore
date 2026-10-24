@@ -1,0 +1,27 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 运行时生成的数据库（含密码哈希等本地数据，不纳入版本库）
+his_kb.db
+*.db
+*.sqlite3
+
+# 上传的图片资源（运行时生成）
+upload/
+
+# 环境变量与密钥
+.env
+.env.*
+*.pem
+*.key
+
+# 日志
+*.log
+
+# 编辑器/系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
