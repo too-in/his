@@ -29,6 +29,7 @@ AI_MOCK_ENABLED = True
 # ==================================================================================
 
 import os
+import sys
 import time
 import json
 import base64
@@ -47,21 +48,52 @@ from pydantic import BaseModel
 import bcrypt
 import httpx
 
+
+def _get_resource_dir() -> str:
+    """只读资源目录（index.html 等随包分发的文件）
+
+    打包后指向 PyInstaller 临时解压目录 sys._MEIPASS；
+    开发模式指向脚本所在目录。
+    """
+    if getattr(sys, "frozen", False):
+        return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _get_data_dir() -> str:
+    """可写数据目录（his_kb.db、upload/ 等需要持久化的内容）
+
+    打包后指向可执行文件所在目录，保证数据随 exe 持久化；
+    开发模式指向脚本所在目录。
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+RESOURCE_DIR = _get_resource_dir()
+DATA_DIR = _get_data_dir()
+BASE_DIR = DATA_DIR  # 兼容原有 BASE_DIR 语义（数据/工作目录）
+
+# 将配置区的相对路径转换为基于数据目录的绝对路径，保证打包后持久化
+UPLOAD_DIR = os.path.join(DATA_DIR, UPLOAD_DIR)
+DB_PATH = os.path.join(DATA_DIR, DB_PATH)
+# 数据库中存储的图片路径使用的 URL 前缀（对应静态挂载点 /upload）
+UPLOAD_URL_PREFIX = "upload"
+
 # 确保上传目录存在
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="HIS 故障知识库", description="本项目仅供个人学习练习，不适合正式业务使用。")
 
 # 挂载上传目录为静态文件，用于访问报错截图
-app.mount("/upload", StaticFiles(directory=os.path.join(BASE_DIR, UPLOAD_DIR)), name="upload")
+app.mount("/upload", StaticFiles(directory=UPLOAD_DIR), name="upload")
 
 
 @app.get("/", include_in_schema=False)
 def root_index():
     """根路径直接返回前端单页"""
-    index_path = os.path.join(BASE_DIR, "index.html")
+    index_path = os.path.join(RESOURCE_DIR, "index.html")
     return FileResponse(index_path, media_type="text/html")
 
 # CORS 配置
@@ -346,7 +378,7 @@ async def api_create_case(
         with open(save_path, "wb") as f:
             f.write(content)
         # 数据库仅存储相对路径
-        image_path = f"{UPLOAD_DIR}/{safe_name}"
+        image_path = f"{UPLOAD_URL_PREFIX}/{safe_name}"
     create_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     conn = get_db()
     cur = conn.cursor()
@@ -403,8 +435,10 @@ def api_delete_case(case_id: int, user: str = Depends(get_current_user)):
     # 同时删除关联图片文件
     if row["image_path"]:
         try:
-            if os.path.exists(row["image_path"]):
-                os.remove(row["image_path"])
+            # 数据库存的是相对 URL（如 upload/xxx.png），需拼回数据目录下的绝对路径
+            abs_image = os.path.join(DATA_DIR, row["image_path"])
+            if os.path.exists(abs_image):
+                os.remove(abs_image)
         except Exception:
             pass
     cur.execute("DELETE FROM cases WHERE id = ?", (case_id,))
@@ -601,7 +635,32 @@ def _build_mock_result(keyword: str) -> str:
 # 启动命令示例（host 必须为 0.0.0.0 以允许局域网访问）：
 #   uvicorn main:app --host 0.0.0.0 --port 8000
 #   或直接运行：python main.py
+# 可通过环境变量 HOST / PORT 覆盖监听地址与端口，例如：
+#   set PORT=8001 && python main.py
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000"))
+
+    # 端口被占用时自动尝试后续端口，避免直接退出
+    def _port_available(h: str, p: int) -> bool:
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((h if h != "0.0.0.0" else "", p))
+                return True
+            except OSError:
+                return False
+
+    base_port = port
+    for attempt in range(50):
+        if _port_available(host, port):
+            if attempt > 0:
+                print(f"[提示] 端口 {base_port} 已被占用，已自动切换到端口 {port}")
+            break
+        port += 1
+    else:
+        raise RuntimeError(f"端口 {base_port}-{base_port + 49} 均被占用，无法启动")
+
+    uvicorn.run(app, host=host, port=port)
