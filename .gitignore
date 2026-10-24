@@ -20,6 +20,14 @@ upload/
 # 日志
 *.log
 
+# PyInstaller 打包产物
+build/
+dist/
+*.exe
+
+# 临时脚本
+import requests.py
+
 # 编辑器/系统
 .idea/
 .vscode/
